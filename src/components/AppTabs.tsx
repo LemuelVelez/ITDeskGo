@@ -20,14 +20,12 @@ export function AppTabs({ tabs }: AppTabsProps) {
         headerShown: false,
         tabBarActiveTintColor: colors.blue,
         tabBarInactiveTintColor: colors.muted,
+        tabBarShowLabel: false,
         tabBarItemStyle: {
+          alignItems: 'center',
           borderRadius: radius.lg,
-          paddingVertical: spacing.xs,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '800',
-          marginTop: 2,
+          justifyContent: 'center',
+          paddingVertical: 0,
         },
         tabBarStyle: {
           ...shadow,
@@ -35,11 +33,11 @@ export function AppTabs({ tabs }: AppTabsProps) {
           borderRadius: radius.lg,
           borderTopWidth: 0,
           bottom: spacing.md,
-          height: 72,
+          height: 64,
           left: spacing.md,
-          paddingBottom: spacing.sm,
+          paddingBottom: spacing.xs,
           paddingHorizontal: spacing.xs,
-          paddingTop: spacing.sm,
+          paddingTop: spacing.xs,
           position: 'absolute',
           right: spacing.md,
         },
@@ -51,6 +49,7 @@ export function AppTabs({ tabs }: AppTabsProps) {
           name={tab.name}
           options={{
             title: tab.title,
+            tabBarAccessibilityLabel: tab.title,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon name={tab.icon} color={color} focused={focused} />
             ),
