@@ -116,5 +116,5 @@ export async function requestPasswordReset(email: string) {
     },
   });
 
-  return 'If the email exists, password reset instructions will be prepared.';
+  return 'If the email exists, password reset instructions will be sent to your email.';
 }

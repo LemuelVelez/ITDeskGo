@@ -46,7 +46,7 @@ export default function ForgotPasswordScreen() {
         <View style={styles.header}>
           <Text style={styles.kicker}>Account Recovery</Text>
           <Text style={styles.title}>Forgot Password</Text>
-          <Text style={styles.description}>Enter your email and ITDeskGo will prepare password reset instructions.</Text>
+          <Text style={styles.description}>Enter your email and ITDeskGo will send password reset instructions through Gmail.</Text>
         </View>
 
         <AppCard style={styles.card}>
