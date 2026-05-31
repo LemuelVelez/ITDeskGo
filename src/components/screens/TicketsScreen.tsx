@@ -1,10 +1,14 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { RoleKey, Ticket, tickets } from '../../constants/app';
+import type { RoleKey, Ticket } from '../../constants/app';
 import { colors, spacing, typography } from '../../constants/theme';
+import { useAuth } from '../../context/AuthContext';
+import { useAsyncResource } from '../../hooks/useAsyncResource';
+import { authFromSession, fetchTickets } from '../../services/itdeskgo';
 import { AppButton } from '../AppButton';
 import { AppCard } from '../AppCard';
 import { Badge } from '../Badge';
+import { ResourceState } from '../ResourceState';
 import { Screen } from '../Screen';
 
 const screenCopy: Record<RoleKey, { title: string; description: string; action: string }> = {
@@ -30,7 +34,14 @@ type TicketsScreenProps = {
 };
 
 export function TicketsScreen({ role }: TicketsScreenProps) {
+  const { session } = useAuth();
+  const auth = authFromSession(session);
   const copy = screenCopy[role];
+  const { data, error, loading, reload } = useAsyncResource(
+    () => fetchTickets(role, auth),
+    [role, session?.token, session?.user.id],
+    [] as Ticket[],
+  );
 
   return (
     <Screen
@@ -38,13 +49,30 @@ export function TicketsScreen({ role }: TicketsScreenProps) {
       description={copy.description}
       rightSlot={<AppButton title={copy.action} variant="secondary" style={styles.actionButton} />}
     >
-      <View style={styles.stack}>
-        {tickets.map((ticket) => (
-          <TicketCard key={ticket.id} ticket={ticket} />
-        ))}
-      </View>
+      <ResourceState
+        loading={loading}
+        error={error}
+        empty={data.length === 0}
+        emptyMessage="No tickets found from the backend."
+        onRetry={reload}
+      />
+      {!loading && !error ? (
+        <View style={styles.stack}>
+          {data.map((ticket) => (
+            <TicketCard key={ticket.id} ticket={ticket} />
+          ))}
+        </View>
+      ) : null}
     </Screen>
   );
+}
+
+function priorityTone(priority: string): 'red' | 'yellow' {
+  return priority.toLowerCase() === 'high' ? 'red' : 'yellow';
+}
+
+function statusTone(status: string): 'green' | 'blue' {
+  return status.toLowerCase() === 'resolved' || status.toLowerCase() === 'closed' ? 'green' : 'blue';
 }
 
 function TicketCard({ ticket }: { ticket: Ticket }) {
@@ -55,11 +83,11 @@ function TicketCard({ ticket }: { ticket: Ticket }) {
           <Text style={styles.id}>{ticket.id}</Text>
           <Text style={styles.title}>{ticket.title}</Text>
         </View>
-        <Badge label={ticket.priority} tone={ticket.priority === 'High' ? 'red' : 'yellow'} />
+        <Badge label={ticket.priority} tone={priorityTone(ticket.priority)} />
       </View>
       <Text style={styles.meta}>{ticket.category} • Requested by {ticket.requester}</Text>
       <View style={styles.footer}>
-        <Badge label={ticket.status} tone={ticket.status === 'Resolved' ? 'green' : 'blue'} />
+        <Badge label={ticket.status} tone={statusTone(ticket.status)} />
         <Text style={styles.updated}>{ticket.updatedAt}</Text>
       </View>
     </AppCard>

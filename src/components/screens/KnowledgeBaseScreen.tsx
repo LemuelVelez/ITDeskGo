@@ -1,10 +1,14 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { KnowledgeArticle, RoleKey, knowledgeArticles } from '../../constants/app';
+import type { KnowledgeArticle, RoleKey } from '../../constants/app';
 import { colors, spacing, typography } from '../../constants/theme';
+import { useAuth } from '../../context/AuthContext';
+import { useAsyncResource } from '../../hooks/useAsyncResource';
+import { authFromSession, fetchKnowledgeArticles } from '../../services/itdeskgo';
 import { AppButton } from '../AppButton';
 import { AppCard } from '../AppCard';
 import { Badge } from '../Badge';
+import { ResourceState } from '../ResourceState';
 import { Screen } from '../Screen';
 
 const copy: Record<Extract<RoleKey, 'employee' | 'itStaff'>, { title: string; description: string; action: string }> = {
@@ -25,7 +29,14 @@ type KnowledgeBaseScreenProps = {
 };
 
 export function KnowledgeBaseScreen({ role }: KnowledgeBaseScreenProps) {
+  const { session } = useAuth();
+  const auth = authFromSession(session);
   const screenCopy = copy[role];
+  const { data, error, loading, reload } = useAsyncResource(
+    () => fetchKnowledgeArticles(role, auth),
+    [role, session?.token, session?.user.id],
+    [] as KnowledgeArticle[],
+  );
 
   return (
     <Screen
@@ -33,11 +44,20 @@ export function KnowledgeBaseScreen({ role }: KnowledgeBaseScreenProps) {
       description={screenCopy.description}
       rightSlot={<AppButton title={screenCopy.action} variant="secondary" style={styles.actionButton} />}
     >
-      <View style={styles.stack}>
-        {knowledgeArticles.map((article) => (
-          <ArticleCard key={article.id} article={article} />
-        ))}
-      </View>
+      <ResourceState
+        loading={loading}
+        error={error}
+        empty={data.length === 0}
+        emptyMessage="No knowledge base articles found from the backend."
+        onRetry={reload}
+      />
+      {!loading && !error ? (
+        <View style={styles.stack}>
+          {data.map((article) => (
+            <ArticleCard key={article.id} article={article} />
+          ))}
+        </View>
+      ) : null}
     </Screen>
   );
 }

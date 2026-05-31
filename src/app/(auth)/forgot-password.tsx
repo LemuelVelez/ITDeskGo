@@ -1,6 +1,6 @@
-import { Link } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Link } from 'expo-router';
 
 import { AppButton } from '../../components/AppButton';
 import { AppCard } from '../../components/AppCard';

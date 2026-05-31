@@ -1,34 +1,61 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { settings } from '../../constants/app';
+import type { SettingsItem } from '../../constants/app';
 import { colors, spacing, typography } from '../../constants/theme';
+import { useAuth } from '../../context/AuthContext';
+import { useAsyncResource } from '../../hooks/useAsyncResource';
+import { authFromSession, fetchSettingsItems } from '../../services/itdeskgo';
 import { AppCard } from '../AppCard';
 import { Badge } from '../Badge';
+import { ResourceState } from '../ResourceState';
 import { Screen } from '../Screen';
 
 export function SettingsScreen() {
+  const { session } = useAuth();
+  const auth = authFromSession(session);
+  const { data, error, loading, reload } = useAsyncResource(
+    () => fetchSettingsItems(auth),
+    [session?.token, session?.user.id],
+    [] as SettingsItem[],
+  );
+
   return (
     <Screen
       title="Settings"
       description="Configure the helpdesk workflow, knowledge-base publishing, asset rules, and system preferences."
     >
-      <View style={styles.stack}>
-        {settings.map((setting) => (
-          <AppCard key={setting.id}>
-            <View style={styles.row}>
-              <View style={styles.iconWrap}>
-                <Text style={styles.icon}>⚙</Text>
-              </View>
-              <View style={styles.content}>
-                <Badge label={setting.id} tone="blue" />
-                <Text style={styles.title}>{setting.title}</Text>
-                <Text style={styles.description}>{setting.description}</Text>
-              </View>
-            </View>
-          </AppCard>
-        ))}
-      </View>
+      <ResourceState
+        loading={loading}
+        error={error}
+        empty={data.length === 0}
+        emptyMessage="No settings found from the backend."
+        onRetry={reload}
+      />
+      {!loading && !error ? (
+        <View style={styles.stack}>
+          {data.map((setting) => (
+            <SettingCard key={setting.id} setting={setting} />
+          ))}
+        </View>
+      ) : null}
     </Screen>
+  );
+}
+
+function SettingCard({ setting }: { setting: SettingsItem }) {
+  return (
+    <AppCard>
+      <View style={styles.row}>
+        <View style={styles.iconWrap}>
+          <Text style={styles.icon}>⚙</Text>
+        </View>
+        <View style={styles.content}>
+          <Badge label={setting.id} tone="blue" />
+          <Text style={styles.title}>{setting.title}</Text>
+          <Text style={styles.description}>{setting.description}</Text>
+        </View>
+      </View>
+    </AppCard>
   );
 }
 

@@ -1,31 +1,13 @@
 import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { RoleKey, roleLabels } from '../../constants/app';
+import { roleLabels, type RoleKey } from '../../constants/app';
 import { colors, spacing, typography } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { AppButton } from '../AppButton';
 import { AppCard } from '../AppCard';
 import { Badge } from '../Badge';
 import { Screen } from '../Screen';
-
-const profileDetails: Record<RoleKey, { name: string; email: string; department: string }> = {
-  employee: {
-    name: 'Maria Santos',
-    email: 'maria.santos@itdeskgo.local',
-    department: 'Finance',
-  },
-  itStaff: {
-    name: 'Daniel Cruz',
-    email: 'daniel.cruz@itdeskgo.local',
-    department: 'Information Technology',
-  },
-  admin: {
-    name: 'Admin User',
-    email: 'admin@itdeskgo.local',
-    department: 'System Administration',
-  },
-};
 
 type ProfileScreenProps = {
   role: RoleKey;
@@ -34,12 +16,12 @@ type ProfileScreenProps = {
 export function ProfileScreen({ role }: ProfileScreenProps) {
   const router = useRouter();
   const { session, signOut } = useAuth();
-  const fallbackProfile = profileDetails[role];
-  const activeUser = session?.role === role ? session.user : undefined;
+  const activeUser = session?.user;
   const profile = {
-    name: displayName(activeUser, fallbackProfile.name),
-    email: readString(activeUser, 'email') ?? fallbackProfile.email,
-    department: readString(activeUser, 'department') ?? readString(activeUser, 'department_name') ?? fallbackProfile.department,
+    name: displayName(activeUser),
+    email: readString(activeUser, 'email') ?? 'Not provided',
+    department: readString(activeUser, 'department') ?? readString(activeUser, 'department_name') ?? 'Not provided',
+    id: readUserId(activeUser),
   };
 
   function handleSignOut() {
@@ -60,8 +42,8 @@ export function ProfileScreen({ role }: ProfileScreenProps) {
 
       <View style={styles.stack}>
         <ProfileRow label="Department" value={profile.department} />
-        <ProfileRow label="Notifications" value="Email and push enabled" />
-        <ProfileRow label="Security" value="Password protected account" />
+        <ProfileRow label="Role" value={roleLabels[role]} />
+        <ProfileRow label="User ID" value={profile.id} />
       </View>
 
       <AppButton title="Sign Out" variant="ghost" onPress={handleSignOut} />
@@ -75,13 +57,23 @@ function readString(source: Record<string, unknown> | undefined, key: string) {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-function displayName(user: Record<string, unknown> | undefined, fallback: string) {
+function readUserId(user: Record<string, unknown> | undefined) {
+  const id = user?.id;
+
+  if (typeof id === 'string' || typeof id === 'number') {
+    return String(id);
+  }
+
+  return 'Not provided';
+}
+
+function displayName(user: Record<string, unknown> | undefined) {
   const fullName = readString(user, 'name');
   const firstName = readString(user, 'first_name');
   const lastName = readString(user, 'last_name');
   const combinedName = [firstName, lastName].filter(Boolean).join(' ');
 
-  return fullName ?? (combinedName.length > 0 ? combinedName : fallback);
+  return fullName ?? (combinedName.length > 0 ? combinedName : 'Account User');
 }
 
 function ProfileRow({ label, value }: { label: string; value: string }) {

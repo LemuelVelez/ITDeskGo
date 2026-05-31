@@ -1,10 +1,14 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { Asset, RoleKey, assets } from '../../constants/app';
+import type { Asset, RoleKey } from '../../constants/app';
 import { colors, spacing, typography } from '../../constants/theme';
+import { useAuth } from '../../context/AuthContext';
+import { useAsyncResource } from '../../hooks/useAsyncResource';
+import { authFromSession, fetchAssets } from '../../services/itdeskgo';
 import { AppButton } from '../AppButton';
 import { AppCard } from '../AppCard';
 import { Badge } from '../Badge';
+import { ResourceState } from '../ResourceState';
 import { Screen } from '../Screen';
 
 const copy: Record<RoleKey, { title: string; description: string; action: string }> = {
@@ -30,7 +34,14 @@ type AssetsScreenProps = {
 };
 
 export function AssetsScreen({ role }: AssetsScreenProps) {
+  const { session } = useAuth();
+  const auth = authFromSession(session);
   const screenCopy = copy[role];
+  const { data, error, loading, reload } = useAsyncResource(
+    () => fetchAssets(role, auth),
+    [role, session?.token, session?.user.id],
+    [] as Asset[],
+  );
 
   return (
     <Screen
@@ -38,13 +49,36 @@ export function AssetsScreen({ role }: AssetsScreenProps) {
       description={screenCopy.description}
       rightSlot={<AppButton title={screenCopy.action} variant="secondary" style={styles.actionButton} />}
     >
-      <View style={styles.stack}>
-        {assets.map((asset) => (
-          <AssetCard key={asset.id} asset={asset} />
-        ))}
-      </View>
+      <ResourceState
+        loading={loading}
+        error={error}
+        empty={data.length === 0}
+        emptyMessage="No assets found from the backend."
+        onRetry={reload}
+      />
+      {!loading && !error ? (
+        <View style={styles.stack}>
+          {data.map((asset) => (
+            <AssetCard key={asset.id} asset={asset} />
+          ))}
+        </View>
+      ) : null}
     </Screen>
   );
+}
+
+function assetTone(status: string): 'blue' | 'green' | 'yellow' {
+  const normalized = status.toLowerCase();
+
+  if (normalized === 'assigned') {
+    return 'blue';
+  }
+
+  if (normalized === 'available') {
+    return 'green';
+  }
+
+  return 'yellow';
 }
 
 function AssetCard({ asset }: { asset: Asset }) {
@@ -55,10 +89,7 @@ function AssetCard({ asset }: { asset: Asset }) {
           <Text style={styles.id}>{asset.id}</Text>
           <Text style={styles.name}>{asset.name}</Text>
         </View>
-        <Badge
-          label={asset.status}
-          tone={asset.status === 'Assigned' ? 'blue' : asset.status === 'Available' ? 'green' : 'yellow'}
-        />
+        <Badge label={asset.status} tone={assetTone(asset.status)} />
       </View>
       <Text style={styles.meta}>Assigned to {asset.assignedTo}</Text>
       <Text style={styles.serial}>Serial: {asset.serial}</Text>

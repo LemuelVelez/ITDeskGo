@@ -1,4 +1,4 @@
-import { RoleKey, roleLabels } from '../constants/app';
+import { roleLabels, type RoleKey } from '../constants/app';
 import { apiRequest } from './api';
 
 export type LoginPayload = {

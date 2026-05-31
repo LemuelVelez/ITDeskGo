@@ -1,4 +1,6 @@
-import { appEnv } from '../config/env';
+import Constants from 'expo-constants';
+
+type RuntimeEnv = Record<string, string | undefined>;
 
 type ApiEnvelope<T> = {
   status?: string;
@@ -10,7 +12,7 @@ type ApiEnvelope<T> = {
 type ApiRequestOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
-  headers?: Record<string, string>;
+  headers?: Record<string, string | undefined>;
 };
 
 export class ApiError extends Error {
@@ -37,9 +39,48 @@ export function getErrorMessage(error: unknown) {
   return 'Something went wrong. Please try again.';
 }
 
+function runtimeEnv() {
+  const extra = (Constants.expoConfig?.extra ?? {}) as RuntimeEnv;
+  const processEnv =
+    ((globalThis as unknown as { process?: { env?: RuntimeEnv } }).process?.env ?? {}) as RuntimeEnv;
+
+  return { extra, processEnv };
+}
+
+function firstDefined(...values: Array<string | undefined>) {
+  return values.find((value) => typeof value === 'string' && value.trim().length > 0)?.trim();
+}
+
+function trimTrailingSlash(value: string) {
+  return value.replace(/\/+$/, '');
+}
+
+function backendBaseUrl() {
+  const { extra, processEnv } = runtimeEnv();
+
+  return trimTrailingSlash(
+    firstDefined(
+      processEnv.EXPO_BACKEND_URL,
+      processEnv.EXPO_PUBLIC_BACKEND_URL,
+      processEnv['app.baseURL'],
+      extra.EXPO_BACKEND_URL,
+      extra.EXPO_PUBLIC_BACKEND_URL,
+      extra.backendUrl,
+      extra.baseURL,
+      extra['app.baseURL'],
+    ) ?? 'http://localhost:8080',
+  );
+}
+
+export const appEnv = {
+  get backendUrl() {
+    return backendBaseUrl();
+  },
+} as const;
+
 function normalizePath(path: string) {
   let cleanPath = path.trim().replace(/^\/+/, '');
-  const cleanBase = appEnv.backendUrl.replace(/\/+$/, '');
+  const cleanBase = backendBaseUrl();
 
   if (cleanBase.endsWith('/api') && cleanPath.startsWith('api/')) {
     cleanPath = cleanPath.slice(4);
@@ -52,13 +93,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isFormDataBody(body: unknown) {
+function isFormDataBody(body: unknown): body is FormData {
   return typeof FormData !== 'undefined' && body instanceof FormData;
 }
 
-function bodyToRequest(body: unknown) {
-  if (body === undefined) {
-    return undefined;
+function bodyToRequest(body: unknown): BodyInit | null | undefined {
+  if (body === undefined || body === null) {
+    return body;
   }
 
   if (typeof body === 'string' || isFormDataBody(body)) {
@@ -66,6 +107,12 @@ function bodyToRequest(body: unknown) {
   }
 
   return JSON.stringify(body);
+}
+
+function cleanHeaders(headers: Record<string, string | undefined>) {
+  return Object.fromEntries(
+    Object.entries(headers).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0),
+  );
 }
 
 async function parseResponse(response: Response) {
@@ -89,12 +136,12 @@ export async function apiRequest<T>(paths: string | readonly string[], options: 
   for (const path of candidatePaths) {
     try {
       const isFormData = isFormDataBody(options.body);
-      const headers: Record<string, string> = {
+      const headers = cleanHeaders({
         Accept: 'application/json',
         ...options.headers,
-      };
+      });
 
-      if (options.body !== undefined && !isFormData && typeof options.body !== 'string') {
+      if (options.body !== undefined && options.body !== null && !isFormData && typeof options.body !== 'string') {
         headers['Content-Type'] = 'application/json';
       }
 
@@ -110,6 +157,10 @@ export async function apiRequest<T>(paths: string | readonly string[], options: 
 
       if (!response.ok) {
         throw new ApiError(message, response.status, envelope?.errors);
+      }
+
+      if (envelope?.status === 'error') {
+        throw new ApiError(message, response.status, envelope.errors);
       }
 
       if (envelope && Object.prototype.hasOwnProperty.call(envelope, 'data')) {
