@@ -7,24 +7,27 @@ type AppButtonProps = {
   onPress?: () => void;
   variant?: 'primary' | 'secondary' | 'ghost';
   style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
 };
 
-export function AppButton({ title, onPress, variant = 'primary', style }: AppButtonProps) {
+export function AppButton({ title, onPress, variant = 'primary', style, disabled = false }: AppButtonProps) {
   return (
     <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
         styles[variant],
-        pressed && styles.pressed,
+        pressed && !disabled && styles.pressed,
+        disabled && styles.disabled,
         style,
       ]}
     >
-      <Text style={[styles.text, textStyles[variant]]}>{title}</Text>
+      <Text style={[styles.text, textStyles[variant], disabled && styles.disabledText]}>{title}</Text>
     </Pressable>
   );
 }
-
 
 const textStyles = {
   ghost: {
@@ -46,11 +49,14 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingHorizontal: spacing.lg,
   },
+  disabled: {
+    opacity: 0.52,
+  },
+  disabledText: {
+    opacity: 0.8,
+  },
   ghost: {
     backgroundColor: 'transparent',
-  },
-  ghostText: {
-    color: colors.blue,
   },
   pressed: {
     opacity: 0.82,
@@ -59,14 +65,8 @@ const styles = StyleSheet.create({
   primary: {
     backgroundColor: colors.blue,
   },
-  primaryText: {
-    color: colors.white,
-  },
   secondary: {
     backgroundColor: colors.yellow,
-  },
-  secondaryText: {
-    color: colors.blueDark,
   },
   text: {
     fontSize: typography.body,

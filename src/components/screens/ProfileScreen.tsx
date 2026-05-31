@@ -1,7 +1,9 @@
+import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { RoleKey, roleLabels } from '../../constants/app';
 import { colors, spacing, typography } from '../../constants/theme';
+import { useAuth } from '../../context/AuthContext';
 import { AppButton } from '../AppButton';
 import { AppCard } from '../AppCard';
 import { Badge } from '../Badge';
@@ -30,7 +32,20 @@ type ProfileScreenProps = {
 };
 
 export function ProfileScreen({ role }: ProfileScreenProps) {
-  const profile = profileDetails[role];
+  const router = useRouter();
+  const { session, signOut } = useAuth();
+  const fallbackProfile = profileDetails[role];
+  const activeUser = session?.role === role ? session.user : undefined;
+  const profile = {
+    name: displayName(activeUser, fallbackProfile.name),
+    email: readString(activeUser, 'email') ?? fallbackProfile.email,
+    department: readString(activeUser, 'department') ?? readString(activeUser, 'department_name') ?? fallbackProfile.department,
+  };
+
+  function handleSignOut() {
+    signOut();
+    router.replace('/login');
+  }
 
   return (
     <Screen title="Profile" description="Manage your account, notification preferences, and helpdesk activity.">
@@ -46,12 +61,27 @@ export function ProfileScreen({ role }: ProfileScreenProps) {
       <View style={styles.stack}>
         <ProfileRow label="Department" value={profile.department} />
         <ProfileRow label="Notifications" value="Email and push enabled" />
-        <ProfileRow label="Security" value="Password updated recently" />
+        <ProfileRow label="Security" value="Password protected account" />
       </View>
 
-      <AppButton title="Sign Out" variant="ghost" />
+      <AppButton title="Sign Out" variant="ghost" onPress={handleSignOut} />
     </Screen>
   );
+}
+
+function readString(source: Record<string, unknown> | undefined, key: string) {
+  const value = source?.[key];
+
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function displayName(user: Record<string, unknown> | undefined, fallback: string) {
+  const fullName = readString(user, 'name');
+  const firstName = readString(user, 'first_name');
+  const lastName = readString(user, 'last_name');
+  const combinedName = [firstName, lastName].filter(Boolean).join(' ');
+
+  return fullName ?? (combinedName.length > 0 ? combinedName : fallback);
 }
 
 function ProfileRow({ label, value }: { label: string; value: string }) {

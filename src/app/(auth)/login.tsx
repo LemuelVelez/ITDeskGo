@@ -6,21 +6,39 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } fr
 import { AppButton } from '../../components/AppButton';
 import { AppCard } from '../../components/AppCard';
 import { AppInput } from '../../components/AppInput';
-import { RoleSwitcher } from '../../components/RoleSwitcher';
-import { RoleKey } from '../../constants/app';
 import { colors, spacing, typography } from '../../constants/theme';
+import { useAuth } from '../../context/AuthContext';
+import { getErrorMessage } from '../../services/api';
 
 const logoSource = require('../../../assets/images/logo.png');
 
-const roleRoutes: Record<RoleKey, string> = {
-  employee: '/(employee)/home',
-  itStaff: '/(it-staff)/dashboard',
-  admin: '/(admin)/dashboard',
-};
-
 export default function LoginScreen() {
   const router = useRouter();
-  const [role, setRole] = useState<RoleKey>('employee');
+  const { signIn } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const canSubmit = email.trim().length > 0 && password.length > 0 && !loading;
+
+  async function handleLogin() {
+    if (!canSubmit) {
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      const session = await signIn({ email, password });
+      router.replace(session.route as never);
+    } catch (loginError) {
+      setError(getErrorMessage(loginError));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <KeyboardAvoidingView
@@ -33,14 +51,30 @@ export default function LoginScreen() {
             <Image source={logoSource} style={styles.logoImage} contentFit="contain" />
           </View>
           <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.description}>Sign in to access IT helpdesk tickets, articles, and assets.</Text>
+          <Text style={styles.description}>Sign in once and ITDeskGo will open the correct workspace for your account role.</Text>
         </View>
 
         <AppCard style={styles.card}>
-          <RoleSwitcher value={role} onChange={setRole} />
-          <AppInput label="Email" placeholder="you@company.com" autoCapitalize="none" keyboardType="email-address" />
-          <AppInput label="Password" placeholder="Enter password" secureTextEntry />
-          <AppButton title="Login" onPress={() => router.replace(roleRoutes[role] as never)} />
+          <AppInput
+            label="Email"
+            placeholder="you@company.com"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            value={email}
+            onChangeText={setEmail}
+          />
+          <AppInput
+            label="Password"
+            placeholder="Enter password"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+            onSubmitEditing={handleLogin}
+            returnKeyType="done"
+          />
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <AppButton title={loading ? 'Signing in...' : 'Login'} onPress={handleLogin} disabled={!canSubmit} />
           <Link href="/forgot-password" style={styles.link}>Forgot Password?</Link>
         </AppCard>
       </ScrollView>
@@ -63,6 +97,15 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     lineHeight: 22,
     textAlign: 'center',
+  },
+  error: {
+    backgroundColor: '#FEE2E2',
+    borderRadius: 14,
+    color: colors.danger,
+    fontSize: typography.label,
+    fontWeight: '800',
+    lineHeight: 20,
+    padding: spacing.md,
   },
   header: {
     alignItems: 'center',

@@ -13,7 +13,7 @@ export default function SplashScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    const timer = setTimeout(() => router.replace('/login'), 900);
+    const timer = setTimeout(() => router.replace('/welcome'), 900);
 
     return () => clearTimeout(timer);
   }, [router]);
@@ -27,7 +27,7 @@ export default function SplashScreen() {
         <Text style={styles.title}>ITDeskGo</Text>
         <Text style={styles.subtitle}>Helpdesk, knowledge base, and asset tracking for modern IT teams.</Text>
       </View>
-      <AppButton title="Continue" variant="secondary" onPress={() => router.replace('/login')} />
+      <AppButton title="Continue" variant="secondary" onPress={() => router.replace('/welcome')} />
     </SafeAreaView>
   );
 }
@@ -56,8 +56,8 @@ const styles = StyleSheet.create({
   logoWrap: {
     alignItems: 'center',
     flex: 1,
-    justifyContent: 'center',
     gap: spacing.md,
+    justifyContent: 'center',
   },
   subtitle: {
     color: colors.white,
