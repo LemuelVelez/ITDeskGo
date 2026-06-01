@@ -214,6 +214,22 @@ function connectionErrorMessage(attemptedUrls: string[]) {
   return `Unable to connect to the backend. Checked ${attemptedUrls.join(', ')}.`;
 }
 
+function serverErrorMessage(message: string) {
+  const lowerMessage = message.toLowerCase();
+
+  if (
+    lowerMessage.includes('unable to connect to the database') ||
+    lowerMessage.includes('mysqli') ||
+    lowerMessage.includes('php_network_getaddresses') ||
+    lowerMessage.includes('getaddrinfo') ||
+    lowerMessage.includes('database')
+  ) {
+    return 'The backend is online, but its database connection is not available. Please check the backend database environment variables in Coolify.';
+  }
+
+  return message;
+}
+
 export async function apiRequest<T>(paths: string | readonly string[], options: ApiRequestOptions = {}): Promise<T> {
   const candidatePaths = Array.isArray(paths) ? paths : [paths];
   const attemptedUrls: string[] = [];
@@ -243,7 +259,8 @@ export async function apiRequest<T>(paths: string | readonly string[], options: 
 
       const payload = await parseResponse(response);
       const envelope = isRecord(payload) ? (payload as ApiEnvelope<T>) : undefined;
-      const message = typeof envelope?.message === 'string' ? envelope.message : 'Request failed.';
+      const rawMessage = typeof envelope?.message === 'string' ? envelope.message : 'Request failed.';
+      const message = serverErrorMessage(rawMessage);
 
       if (!response.ok) {
         throw new ApiError(message, response.status, envelope?.errors);

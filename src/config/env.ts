@@ -9,7 +9,6 @@ const processEnv =
 
 const DEPLOYED_BACKEND_URL = 'https://itdeskgo-api.jrmsu-tc.tech';
 const DEFAULT_BACKEND_PORT = '8080';
-const DEFAULT_FRONTEND_PORT = '8081';
 const ANDROID_EMULATOR_HOST = '10.0.2.2';
 
 function firstDefined(...values: Array<string | undefined>) {
@@ -32,14 +31,14 @@ function expoHostIp() {
   return hostUri.replace(/^https?:\/\//, '').split(':')[0];
 }
 
-function defaultLocalUrl(port: string) {
+function defaultLocalBackendUrl() {
   if (Platform.OS === 'android') {
     const hostIp = expoHostIp();
 
-    return `http://${hostIp && hostIp !== 'localhost' ? hostIp : ANDROID_EMULATOR_HOST}:${port}`;
+    return `http://${hostIp && hostIp !== 'localhost' ? hostIp : ANDROID_EMULATOR_HOST}:${DEFAULT_BACKEND_PORT}`;
   }
 
-  return `http://localhost:${port}`;
+  return `http://localhost:${DEFAULT_BACKEND_PORT}`;
 }
 
 function normalizeAndroidLocalhostUrl(value: string) {
@@ -105,18 +104,12 @@ function resolveBackendUrl() {
   }
 
   if (useLocalBackend()) {
-    return configuredUrl ?? defaultLocalUrl(DEFAULT_BACKEND_PORT);
+    return configuredUrl ?? defaultLocalBackendUrl();
   }
 
   return DEPLOYED_BACKEND_URL;
 }
 
 export const appEnv = {
-  frontendUrl: trimTrailingSlash(
-    normalizeAndroidLocalhostUrl(
-      firstDefined(processEnv.EXPO_FRONTEND_URL, processEnv.EXPO_PUBLIC_FRONTEND_URL, extra.EXPO_FRONTEND_URL, extra.frontendUrl) ??
-        defaultLocalUrl(DEFAULT_FRONTEND_PORT),
-    ),
-  ),
   backendUrl: trimTrailingSlash(normalizeAndroidLocalhostUrl(resolveBackendUrl())),
 } as const;
