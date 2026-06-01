@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 type RuntimeEnv = Record<string, string | undefined>;
 
@@ -14,6 +15,9 @@ type ApiRequestOptions = {
   body?: unknown;
   headers?: Record<string, string | undefined>;
 };
+
+const DEFAULT_BACKEND_PORT = '8080';
+const ANDROID_EMULATOR_HOST = '10.0.2.2';
 
 export class ApiError extends Error {
   status: number;
@@ -55,10 +59,51 @@ function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, '');
 }
 
+function expoHostIp() {
+  const hostUri =
+    Constants.expoConfig?.hostUri ??
+    ((Constants as unknown as { manifest2?: { extra?: { expoClient?: { hostUri?: string } } } }).manifest2?.extra?.expoClient?.hostUri);
+
+  if (typeof hostUri !== 'string' || hostUri.trim().length === 0) {
+    return undefined;
+  }
+
+  return hostUri.replace(/^https?:\/\//, '').split(':')[0];
+}
+
+function defaultBackendUrl() {
+  if (Platform.OS === 'android') {
+    const hostIp = expoHostIp();
+
+    return `http://${hostIp && hostIp !== 'localhost' ? hostIp : ANDROID_EMULATOR_HOST}:${DEFAULT_BACKEND_PORT}`;
+  }
+
+  return `http://localhost:${DEFAULT_BACKEND_PORT}`;
+}
+
+function normalizeAndroidLocalhostUrl(value: string) {
+  if (Platform.OS !== 'android') {
+    return value;
+  }
+
+  try {
+    const url = new URL(value);
+
+    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+      url.hostname = ANDROID_EMULATOR_HOST;
+
+      return url.toString().replace(/\/+$/, '');
+    }
+
+    return value;
+  } catch {
+    return value.replace(/^(https?:\/\/)(localhost|127\.0\.0\.1)(?=[:/]|$)/i, `$1${ANDROID_EMULATOR_HOST}`);
+  }
+}
+
 function backendBaseUrl() {
   const { extra, processEnv } = runtimeEnv();
-
-  return trimTrailingSlash(
+  const configuredUrl =
     firstDefined(
       processEnv.EXPO_BACKEND_URL,
       processEnv.EXPO_PUBLIC_BACKEND_URL,
@@ -68,8 +113,9 @@ function backendBaseUrl() {
       extra.backendUrl,
       extra.baseURL,
       extra['app.baseURL'],
-    ) ?? 'http://localhost:8080',
-  );
+    ) ?? defaultBackendUrl();
+
+  return trimTrailingSlash(normalizeAndroidLocalhostUrl(configuredUrl));
 }
 
 export const appEnv = {
