@@ -1,7 +1,4 @@
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
-
-type RuntimeEnv = Record<string, string | undefined>;
+import { appEnv, backendUrlCandidates } from '../config/env';
 
 type ApiEnvelope<T> = {
   status?: string;
@@ -16,8 +13,7 @@ type ApiRequestOptions = {
   headers?: Record<string, string | undefined>;
 };
 
-const DEFAULT_BACKEND_PORT = '8080';
-const ANDROID_EMULATOR_HOST = '10.0.2.2';
+export { appEnv };
 
 export class ApiError extends Error {
   status: number;
@@ -43,90 +39,13 @@ export function getErrorMessage(error: unknown) {
   return 'Something went wrong. Please try again.';
 }
 
-function runtimeEnv() {
-  const extra = (Constants.expoConfig?.extra ?? {}) as RuntimeEnv;
-  const processEnv =
-    ((globalThis as unknown as { process?: { env?: RuntimeEnv } }).process?.env ?? {}) as RuntimeEnv;
-
-  return { extra, processEnv };
-}
-
-function firstDefined(...values: Array<string | undefined>) {
-  return values.find((value) => typeof value === 'string' && value.trim().length > 0)?.trim();
-}
-
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, '');
 }
 
-function expoHostIp() {
-  const hostUri =
-    Constants.expoConfig?.hostUri ??
-    ((Constants as unknown as { manifest2?: { extra?: { expoClient?: { hostUri?: string } } } }).manifest2?.extra?.expoClient?.hostUri);
-
-  if (typeof hostUri !== 'string' || hostUri.trim().length === 0) {
-    return undefined;
-  }
-
-  return hostUri.replace(/^https?:\/\//, '').split(':')[0];
-}
-
-function defaultBackendUrl() {
-  if (Platform.OS === 'android') {
-    const hostIp = expoHostIp();
-
-    return `http://${hostIp && hostIp !== 'localhost' ? hostIp : ANDROID_EMULATOR_HOST}:${DEFAULT_BACKEND_PORT}`;
-  }
-
-  return `http://localhost:${DEFAULT_BACKEND_PORT}`;
-}
-
-function normalizeAndroidLocalhostUrl(value: string) {
-  if (Platform.OS !== 'android') {
-    return value;
-  }
-
-  try {
-    const url = new URL(value);
-
-    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
-      url.hostname = ANDROID_EMULATOR_HOST;
-
-      return url.toString().replace(/\/+$/, '');
-    }
-
-    return value;
-  } catch {
-    return value.replace(/^(https?:\/\/)(localhost|127\.0\.0\.1)(?=[:/]|$)/i, `$1${ANDROID_EMULATOR_HOST}`);
-  }
-}
-
-function backendBaseUrl() {
-  const { extra, processEnv } = runtimeEnv();
-  const configuredUrl =
-    firstDefined(
-      processEnv.EXPO_BACKEND_URL,
-      processEnv.EXPO_PUBLIC_BACKEND_URL,
-      processEnv['app.baseURL'],
-      extra.EXPO_BACKEND_URL,
-      extra.EXPO_PUBLIC_BACKEND_URL,
-      extra.backendUrl,
-      extra.baseURL,
-      extra['app.baseURL'],
-    ) ?? defaultBackendUrl();
-
-  return trimTrailingSlash(normalizeAndroidLocalhostUrl(configuredUrl));
-}
-
-export const appEnv = {
-  get backendUrl() {
-    return backendBaseUrl();
-  },
-} as const;
-
-function normalizePath(path: string) {
+function normalizePath(baseUrl: string, path: string) {
   let cleanPath = path.trim().replace(/^\/+/, '');
-  const cleanBase = backendBaseUrl();
+  const cleanBase = trimTrailingSlash(baseUrl);
 
   if (cleanBase.endsWith('/api') && cleanPath.startsWith('api/')) {
     cleanPath = cleanPath.slice(4);
@@ -161,6 +80,22 @@ function cleanHeaders(headers: Record<string, string | undefined>) {
   );
 }
 
+function isNetworkError(error: unknown) {
+  if (error instanceof ApiError) {
+    return false;
+  }
+
+  if (!(error instanceof Error)) {
+    return true;
+  }
+
+  return /network request failed|fetch failed|failed to fetch|load failed|connectexception/i.test(error.message);
+}
+
+function connectionMessage(urls: string[]) {
+  return `Unable to connect to the backend. Checked ${urls.join(', ')}. Make sure CodeIgniter is running on 0.0.0.0:8080 and your phone/emulator can reach the same network.`;
+}
+
 async function parseResponse(response: Response) {
   const text = await response.text();
 
@@ -175,52 +110,76 @@ async function parseResponse(response: Response) {
   }
 }
 
+async function sendRequest<T>(url: string, options: ApiRequestOptions): Promise<T> {
+  const isFormData = isFormDataBody(options.body);
+  const headers = cleanHeaders({
+    Accept: 'application/json',
+    ...options.headers,
+  });
+
+  if (options.body !== undefined && options.body !== null && !isFormData && typeof options.body !== 'string') {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  const response = await fetch(url, {
+    method: options.method ?? 'GET',
+    headers,
+    body: bodyToRequest(options.body),
+  });
+
+  const payload = await parseResponse(response);
+  const envelope = isRecord(payload) ? (payload as ApiEnvelope<T>) : undefined;
+  const message = typeof envelope?.message === 'string' ? envelope.message : 'Request failed.';
+
+  if (!response.ok) {
+    throw new ApiError(message, response.status, envelope?.errors);
+  }
+
+  if (envelope?.status === 'error') {
+    throw new ApiError(message, response.status, envelope.errors);
+  }
+
+  if (envelope && Object.prototype.hasOwnProperty.call(envelope, 'data')) {
+    return envelope.data as T;
+  }
+
+  return payload as T;
+}
+
 export async function apiRequest<T>(paths: string | readonly string[], options: ApiRequestOptions = {}): Promise<T> {
   const candidatePaths = Array.isArray(paths) ? paths : [paths];
+  const baseUrls = backendUrlCandidates();
   let lastError: unknown;
+  let lastApiError: ApiError | undefined;
+  const attemptedUrls: string[] = [];
 
-  for (const path of candidatePaths) {
-    try {
-      const isFormData = isFormDataBody(options.body);
-      const headers = cleanHeaders({
-        Accept: 'application/json',
-        ...options.headers,
-      });
+  for (const baseUrl of baseUrls) {
+    for (const path of candidatePaths) {
+      const url = normalizePath(baseUrl, path);
+      attemptedUrls.push(url);
 
-      if (options.body !== undefined && options.body !== null && !isFormData && typeof options.body !== 'string') {
-        headers['Content-Type'] = 'application/json';
-      }
+      try {
+        return await sendRequest<T>(url, options);
+      } catch (error) {
+        lastError = error;
 
-      const response = await fetch(normalizePath(path), {
-        method: options.method ?? 'GET',
-        headers,
-        body: bodyToRequest(options.body),
-      });
+        if (error instanceof ApiError) {
+          lastApiError = error;
 
-      const payload = await parseResponse(response);
-      const envelope = isRecord(payload) ? (payload as ApiEnvelope<T>) : undefined;
-      const message = typeof envelope?.message === 'string' ? envelope.message : 'Request failed.';
-
-      if (!response.ok) {
-        throw new ApiError(message, response.status, envelope?.errors);
-      }
-
-      if (envelope?.status === 'error') {
-        throw new ApiError(message, response.status, envelope.errors);
-      }
-
-      if (envelope && Object.prototype.hasOwnProperty.call(envelope, 'data')) {
-        return envelope.data as T;
-      }
-
-      return payload as T;
-    } catch (error) {
-      lastError = error;
-
-      if (error instanceof ApiError && error.status !== 404) {
-        throw error;
+          if (error.status !== 404) {
+            throw error;
+          }
+        }
       }
     }
+  }
+
+  if (lastApiError) {
+    throw lastApiError;
+  }
+
+  if (isNetworkError(lastError)) {
+    throw new ApiError(connectionMessage(attemptedUrls), 0, lastError);
   }
 
   throw lastError instanceof Error ? lastError : new Error('Unable to connect to the backend.');
