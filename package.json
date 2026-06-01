@@ -39,7 +39,10 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "eas:create-env": "node ./scripts/eas-create-env.mjs",
+    "eas:create-env:preview": "node ./scripts/eas-create-env.mjs preview",
+    "eas:create-env:production": "node ./scripts/eas-create-env.mjs production"
   },
   "private": true
 }
