@@ -13,6 +13,10 @@ type AppTabsProps = {
   tabs: readonly AppTabItem[];
 };
 
+const tabBarInset = spacing.md;
+const tabBarPadding = spacing.xs;
+const tabBarHeight = 64;
+
 export function AppTabs({ tabs }: AppTabsProps) {
   return (
     <Tabs
@@ -21,25 +25,36 @@ export function AppTabs({ tabs }: AppTabsProps) {
         tabBarActiveTintColor: colors.blue,
         tabBarInactiveTintColor: colors.muted,
         tabBarShowLabel: false,
+        tabBarIconStyle: {
+          alignItems: 'center',
+          flex: 1,
+          height: '100%',
+          justifyContent: 'center',
+          marginTop: 0,
+          width: '100%',
+        },
         tabBarItemStyle: {
           alignItems: 'center',
           borderRadius: radius.lg,
+          height: '100%',
           justifyContent: 'center',
-          paddingVertical: 0,
+          padding: 0,
+        },
+        tabBarLabelStyle: {
+          display: 'none',
         },
         tabBarStyle: {
           ...shadow,
           backgroundColor: colors.white,
           borderRadius: radius.lg,
           borderTopWidth: 0,
-          bottom: spacing.md,
-          height: 64,
-          left: spacing.md,
-          paddingBottom: spacing.xs,
-          paddingHorizontal: spacing.xs,
-          paddingTop: spacing.xs,
+          bottom: tabBarInset,
+          height: tabBarHeight,
+          left: 0,
+          marginHorizontal: tabBarInset,
+          padding: tabBarPadding,
           position: 'absolute',
-          right: spacing.md,
+          right: 0,
         },
       }}
     >

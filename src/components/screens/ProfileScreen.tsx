@@ -1,21 +1,19 @@
-import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { roleLabels, type RoleKey } from '../../constants/app';
 import { colors, spacing, typography } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
-import { AppButton } from '../AppButton';
 import { AppCard } from '../AppCard';
 import { Badge } from '../Badge';
 import { Screen } from '../Screen';
+import { SignOutButton } from '../SignOutButton';
 
 type ProfileScreenProps = {
   role: RoleKey;
 };
 
 export function ProfileScreen({ role }: ProfileScreenProps) {
-  const router = useRouter();
-  const { session, signOut } = useAuth();
+  const { session } = useAuth();
   const activeUser = session?.user;
   const profile = {
     name: displayName(activeUser),
@@ -23,12 +21,6 @@ export function ProfileScreen({ role }: ProfileScreenProps) {
     department: readString(activeUser, 'department') ?? readString(activeUser, 'department_name') ?? 'Not provided',
     id: readUserId(activeUser),
   };
-
-  function handleSignOut() {
-    signOut();
-    router.replace('/login');
-  }
-
   return (
     <Screen title="Profile" description="Manage your account, notification preferences, and helpdesk activity.">
       <AppCard style={styles.profileCard}>
@@ -46,7 +38,7 @@ export function ProfileScreen({ role }: ProfileScreenProps) {
         <ProfileRow label="User ID" value={profile.id} />
       </View>
 
-      <AppButton title="Sign Out" variant="ghost" onPress={handleSignOut} />
+      <SignOutButton />
     </Screen>
   );
 }

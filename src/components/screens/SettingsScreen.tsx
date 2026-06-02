@@ -9,6 +9,7 @@ import { AppCard } from '../AppCard';
 import { Badge } from '../Badge';
 import { ResourceState } from '../ResourceState';
 import { Screen } from '../Screen';
+import { SignOutButton } from '../SignOutButton';
 
 export function SettingsScreen() {
   const { session } = useAuth();
@@ -38,6 +39,8 @@ export function SettingsScreen() {
           ))}
         </View>
       ) : null}
+
+      <SignOutButton style={styles.signOutButton} />
     </Screen>
   );
 }
@@ -86,6 +89,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     flexDirection: 'row',
     gap: spacing.md,
+  },
+  signOutButton: {
+    marginTop: spacing.sm,
   },
   stack: {
     gap: spacing.md,
