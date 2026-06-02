@@ -16,6 +16,32 @@ type RequestAuth = {
   userId?: string;
 };
 
+export type UserMutationPayload = {
+  name?: string;
+  email?: string;
+  password?: string;
+  role_id?: string | number;
+  department_id?: string | number;
+  status?: string;
+  phone?: string;
+};
+
+export type AssetMutationPayload = {
+  asset_tag?: string;
+  asset_type_id?: string | number;
+  name?: string;
+  asset_name?: string;
+  serial_number?: string;
+  brand?: string;
+  model?: string;
+  status?: string;
+  assigned_to?: string | number;
+  purchase_date?: string;
+  purchase_cost?: string | number;
+  location?: string;
+  notes?: string;
+};
+
 function isRecord(value: unknown): value is RawRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -111,6 +137,30 @@ function authHeaders(auth?: RequestAuth) {
   };
 }
 
+function cleanPayload<T extends RawRecord>(payload: T): T {
+  return Object.fromEntries(
+    Object.entries(payload).filter(([, value]) => {
+      if (value === undefined || value === null) {
+        return false;
+      }
+
+      if (typeof value === 'string') {
+        return value.trim().length > 0;
+      }
+
+      return true;
+    }),
+  ) as T;
+}
+
+function recordFromMutationResponse(response: unknown, key: string) {
+  if (isRecord(response) && isRecord(response[key])) {
+    return response[key];
+  }
+
+  return response;
+}
+
 export function userIdFromSession(session: AuthSession | null) {
   const id = session?.user.id;
 
@@ -164,14 +214,24 @@ function normalizeArticle(record: unknown): KnowledgeArticle {
 function normalizeAsset(record: unknown): Asset {
   const item = isRecord(record) ? record : {};
   const status = titleCase(firstString(item, ['status'], 'Available'));
+  const backendId = firstString(item, ['id']);
+  const assetTag = firstString(item, ['asset_tag', 'tag', 'code'], backendId || 'AST');
 
   return {
-    id: firstString(item, ['asset_tag', 'tag', 'code', 'id'], 'AST'),
+    id: assetTag,
     name: firstString(item, ['name', 'asset_name', 'asset_type_name', 'model'], 'Unnamed asset'),
     assignedTo: firstString(item, ['assigned_to_name', 'assigned_user_name', 'assigned_to', 'user_name'], 'Not assigned'),
     status,
     serial: firstString(item, ['serial_number', 'serial', 'asset_tag'], 'No serial number'),
-  };
+    backendId,
+    assetTag,
+    assetTypeId: firstString(item, ['asset_type_id']),
+    assignedToId: firstString(item, ['assigned_to']),
+    brand: firstString(item, ['brand']),
+    model: firstString(item, ['model']),
+    location: firstString(item, ['location']),
+    notes: firstString(item, ['notes']),
+  } as Asset;
 }
 
 function normalizeUser(record: unknown): User {
@@ -186,7 +246,11 @@ function normalizeUser(record: unknown): User {
     role: titleCase(firstString(item, ['role_name', 'role_slug', 'role'], 'Employee')),
     department: firstString(item, ['department_name', 'department'], 'No department'),
     status: titleCase(firstString(item, ['status'], 'Active')),
-  };
+    email: firstString(item, ['email']),
+    phone: firstString(item, ['phone']),
+    roleId: firstString(item, ['role_id']),
+    departmentId: firstString(item, ['department_id']),
+  } as User;
 }
 
 function dashboardNumber(summary: DashboardSummary | null, path: string[], fallback = 0) {
@@ -283,6 +347,33 @@ export async function fetchAssets(role: RoleKey, auth?: RequestAuth, limit = 20)
   return listFromResponse(response, ['assets']).map(normalizeAsset);
 }
 
+export async function createAsset(payload: AssetMutationPayload, auth?: RequestAuth): Promise<Asset> {
+  const response = await apiRequest<unknown>(['api/assets', 'assets'], {
+    method: 'POST',
+    body: cleanPayload(payload as RawRecord),
+    headers: authHeaders(auth),
+  });
+
+  return normalizeAsset(recordFromMutationResponse(response, 'asset'));
+}
+
+export async function updateAsset(id: string | number, payload: AssetMutationPayload, auth?: RequestAuth): Promise<Asset> {
+  const response = await apiRequest<unknown>([`api/assets/${id}`, `assets/${id}`], {
+    method: 'PUT',
+    body: cleanPayload(payload as RawRecord),
+    headers: authHeaders(auth),
+  });
+
+  return normalizeAsset(recordFromMutationResponse(response, 'asset'));
+}
+
+export async function deleteAsset(id: string | number, auth?: RequestAuth): Promise<void> {
+  await apiRequest<unknown>([`api/assets/${id}`, `assets/${id}`], {
+    method: 'DELETE',
+    headers: authHeaders(auth),
+  });
+}
+
 export async function fetchKnowledgeArticles(role: RoleKey, auth?: RequestAuth, limit = 20): Promise<KnowledgeArticle[]> {
   const params = queryString({
     per_page: limit,
@@ -309,6 +400,33 @@ export async function fetchUsers(auth?: RequestAuth, limit = 20): Promise<User[]
   });
 
   return listFromResponse(response, ['users']).map(normalizeUser);
+}
+
+export async function createUser(payload: UserMutationPayload, auth?: RequestAuth): Promise<User> {
+  const response = await apiRequest<unknown>(['api/users', 'users'], {
+    method: 'POST',
+    body: cleanPayload(payload as RawRecord),
+    headers: authHeaders(auth),
+  });
+
+  return normalizeUser(recordFromMutationResponse(response, 'user'));
+}
+
+export async function updateUser(id: string | number, payload: UserMutationPayload, auth?: RequestAuth): Promise<User> {
+  const response = await apiRequest<unknown>([`api/users/${id}`, `users/${id}`], {
+    method: 'PUT',
+    body: cleanPayload(payload as RawRecord),
+    headers: authHeaders(auth),
+  });
+
+  return normalizeUser(recordFromMutationResponse(response, 'user'));
+}
+
+export async function deleteUser(id: string | number, auth?: RequestAuth): Promise<void> {
+  await apiRequest<unknown>([`api/users/${id}`, `users/${id}`], {
+    method: 'DELETE',
+    headers: authHeaders(auth),
+  });
 }
 
 function countArrayField(record: RawRecord, key: string) {
